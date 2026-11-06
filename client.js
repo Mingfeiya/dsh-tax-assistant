@@ -474,6 +474,7 @@ window.__ModuleLoader__.load({
         capabilityWarning: '助手能力初始化未完成',
         capabilityReady: '助手能力已就绪',
         historyTitle: '历史会话',
+        historySub: '选择一个会话继续之前的对话',
         historyEmpty: '还没有历史会话',
         historyLoading: '加载中…',
         loadFailed: '历史记录加载失败',
@@ -557,6 +558,7 @@ window.__ModuleLoader__.load({
         capabilityWarning: 'Assistant capabilities were not initialised',
         capabilityReady: 'capabilities ready',
         historyTitle: 'Previous chats',
+        historySub: 'Pick a conversation to continue',
         historyEmpty: 'No previous chats yet',
         historyLoading: 'Loading…',
         loadFailed: 'Could not load the history',
@@ -721,6 +723,29 @@ window.__ModuleLoader__.load({
           focusable: 'false',
         },
         h('rect', { x: 7, y: 7, width: 10, height: 10, rx: 2.4, fill: 'currentColor' }),
+      );
+    }
+
+    /** Back affordance for the history list: drawn, never a typed arrow. */
+    function BackIcon() {
+      return h(
+        'svg',
+        {
+          className: 'ac-icon-back',
+          viewBox: '0 0 24 24',
+          width: 16,
+          height: 16,
+          'aria-hidden': 'true',
+          focusable: 'false',
+        },
+        h('path', {
+          d: 'M19.4 12H5.2M5.2 12l5.6-5.6M5.2 12l5.6 5.6',
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1.9,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+        }),
       );
     }
 
@@ -1317,7 +1342,6 @@ window.__ModuleLoader__.load({
             disabled,
           },
           h('span', { className: 'ac-agent-name' }, t(current.nameKey)),
-          h('span', { className: 'ac-agent-caret' }, open ? '▲' : '▼'),
         ),
         open
           ? h(
@@ -1522,8 +1546,12 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { className: 'ac-history-head' },
-          h('button', { type: 'button', className: 'ac-ghost', onClick: onBack }, '← ' + t('back')),
-          h('h2', { className: 'ac-history-title' }, t('historyTitle')),
+          h(
+            'button',
+            { type: 'button', className: 'ac-ghost ac-back', onClick: onBack, title: t('back'), 'aria-label': t('back') },
+            h(BackIcon, null),
+            h('span', null, t('back')),
+          ),
         ),
         h(
           'div',
@@ -2451,7 +2479,7 @@ window.__ModuleLoader__.load({
           'div',
           { className: 'ac-root' },
           h('style', null, CSS),
-          header(t('historyTitle'), null),
+          header(t('historyTitle'), t('historySub')),
           h(HistoryView, {
             t,
             items: historyItems,
@@ -2592,7 +2620,6 @@ window.__ModuleLoader__.load({
       .ac-agent-btn:hover:not(:disabled) { border-color: var(--dsw-alias-brand-primary, #4b6ef5); }
       .ac-agent-btn:disabled { opacity: 0.6; cursor: default; }
       .ac-agent-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .ac-agent-caret { font-size: 9px; color: var(--dsw-alias-label-secondary, #646a73); }
       .ac-agent-menu {
         position: absolute;
         top: calc(100% + 6px);
@@ -3111,6 +3138,18 @@ window.__ModuleLoader__.load({
         line-height: 1.75;
       }
       .ac-head { padding: 11px 22px; border-bottom: 1px solid var(--dsw-alias-border-l1, #e9eaec); }
+      /* Keep the assistant picker at the exact centre of the header, whatever
+         the title block or the action list is wide. */
+      .ac-head-center {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        max-width: 46%;
+        pointer-events: none;
+      }
+      .ac-head-center > * { pointer-events: auto; }
+      .ac-head-text { max-width: 42%; }
       .ac-title { font-size: 15px; font-weight: 600; }
       .ac-sub { margin-top: 1px; font-size: 12px; }
       .ac-head-actions { gap: 0; }
@@ -3211,6 +3250,8 @@ window.__ModuleLoader__.load({
       }
       .ac-icon-send { display: block; }
       .ac-icon-stop { display: block; }
+      .ac-icon-back { display: block; flex: 0 0 auto; }
+      .ac-back { display: inline-flex; align-items: center; gap: 6px; }
 
       .ac-notice { max-width: 748px; margin-bottom: 10px; padding: 9px 14px; border-radius: 12px; font-size: 12.5px; }
       .ac-msg-tools { display: flex; gap: 4px; margin-top: 8px; }
