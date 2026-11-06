@@ -464,9 +464,9 @@ window.__ModuleLoader__.load({
         send: '发送',
         thinking: '思考中',
         stopWaiting: '停止等待',
-        emptyTitle: '可以开始提问了',
+        emptyTitle: '有什么可以帮你的吗？',
         emptyHint: '例如：帮我梳理一下本期涉税鉴证需要重点核查的事项。',
-        placeholder: '向智税助手提问…',
+        placeholder: '给智税助手发送消息…',
         foot: 'Enter 发送 · Shift+Enter 换行',
         requestFailed: '本次请求没有完成，请重试',
         networkFailed: '无法连接 Harness 代理，请确认应用仍在运行',
@@ -503,6 +503,8 @@ window.__ModuleLoader__.load({
         stepRunning: '正在{step}…',
         stepTool: '正在处理你的请求…',
         stepCompany: '需要先确认企业信息…',
+        copy: '复制',
+        copied: '已复制',
         noAnswer: '（本轮没有返回文字内容）',
         expiredTitle: '登录已失效',
         retry: '重新登录',
@@ -545,7 +547,7 @@ window.__ModuleLoader__.load({
         send: 'Send',
         thinking: 'Thinking',
         stopWaiting: 'Stop waiting',
-        emptyTitle: 'Ask anything',
+        emptyTitle: 'How can I help you today?',
         emptyHint: 'For example: what should I check first in this attestation task?',
         placeholder: 'Message the smart tax assistant…',
         foot: 'Enter to send · Shift+Enter for a new line',
@@ -584,6 +586,8 @@ window.__ModuleLoader__.load({
         stepRunning: 'Working: {step}…',
         stepTool: 'Working on your request…',
         stepCompany: 'Company details are needed first…',
+        copy: 'Copy',
+        copied: 'Copied',
         noAnswer: '(no text in this turn)',
         expiredTitle: 'Session expired',
         retry: 'Sign in again',
@@ -681,11 +685,49 @@ window.__ModuleLoader__.load({
       );
     }
 
+    /** Upward arrow matching the chat send affordance, drawn rather than typed. */
+    function SendIcon() {
+      return h(
+        'svg',
+        {
+          className: 'ac-icon-send',
+          viewBox: '0 0 24 24',
+          width: 18,
+          height: 18,
+          'aria-hidden': 'true',
+          focusable: 'false',
+        },
+        h('path', {
+          d: 'M12 19.2V6.4M12 6.4 6.6 11.8M12 6.4l5.4 5.4',
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 2.1,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+        }),
+      );
+    }
+
+    /** The stop glyph: a rounded square, like the chat app's interrupt control. */
+    function StopIcon() {
+      return h(
+        'svg',
+        {
+          className: 'ac-icon-stop',
+          viewBox: '0 0 24 24',
+          width: 14,
+          height: 14,
+          'aria-hidden': 'true',
+          focusable: 'false',
+        },
+        h('rect', { x: 7, y: 7, width: 10, height: 10, rx: 2.4, fill: 'currentColor' }),
+      );
+    }
+
     function ThinkingRow({ t, seconds }) {
       return h(
         'div',
         { className: 'ac-msg ac-msg-assistant' },
-        h('div', { className: 'ac-avatar' }, h('span', null, 'AI')),
         h(
           'div',
           { className: 'ac-bubble ac-bubble-thinking' },
@@ -801,16 +843,32 @@ window.__ModuleLoader__.load({
 
     function MessageRow({ t, message, busy, busyAction, busyArtifact, onFormValue, onFormSubmit, onAction, onDownload }) {
       const isUser = message.role === 'user';
+      const [copied, setCopied] = useState(false);
       const meta = message.meta || {};
       const footnotes = [];
       if (!isUser) {
         if (meta.tools > 0) footnotes.push(t('toolsUsed') + ' ' + meta.tools);
         if (meta.knowledgeUsed) footnotes.push(t('knowledgeUsed'));
       }
+      const copy = () => {
+        const content = String(message.content || '');
+        if (!content) return;
+        const done = () => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        };
+        try {
+          const clipboard = navigator.clipboard;
+          if (clipboard && typeof clipboard.writeText === 'function') {
+            clipboard.writeText(content).then(done).catch(() => {});
+          }
+        } catch {
+          /* clipboard is unavailable outside a secure context */
+        }
+      };
       return h(
         'div',
         { className: 'ac-msg ' + (isUser ? 'ac-msg-user' : 'ac-msg-assistant') },
-        h('div', { className: 'ac-avatar' }, h('span', null, isUser ? 'ME' : 'AI')),
         h(
           'div',
           { className: 'ac-msg-body' },
@@ -831,6 +889,17 @@ window.__ModuleLoader__.load({
               ? h('div', { className: 'ac-stream-note' }, message.progress)
               : null,
             footnotes.length > 0 ? h('div', { className: 'ac-msg-foot' }, footnotes.join(' · ')) : null,
+            !isUser && !message.streaming && message.content
+              ? h(
+                  'div',
+                  { className: 'ac-msg-tools' },
+                  h(
+                    'button',
+                    { type: 'button', className: 'ac-tool-btn', onClick: copy },
+                    copied ? t('copied') : t('copy'),
+                  ),
+                )
+              : null,
           ),
           message.form && !isUser
             ? h(BusinessFormCard, {
@@ -1307,16 +1376,28 @@ window.__ModuleLoader__.load({
             },
           }),
           sending
-            ? h('button', { type: 'button', className: 'ac-btn ac-btn-stop', onClick: onStop }, t('stopWaiting'))
+            ? h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'ac-btn ac-btn-stop',
+                  title: t('stopWaiting'),
+                  'aria-label': t('stopWaiting'),
+                  onClick: onStop,
+                },
+                h(StopIcon),
+              )
             : h(
                 'button',
                 {
                   type: 'button',
                   className: 'ac-btn ac-btn-send',
+                  title: t('send'),
+                  'aria-label': t('send'),
                   onClick: onSubmit,
                   disabled: !value.trim(),
                 },
-                t('send'),
+                h(SendIcon),
               ),
         ),
         h('p', { className: 'ac-foot' }, t('foot')),
@@ -3019,6 +3100,135 @@ window.__ModuleLoader__.load({
         cursor: pointer;
       }
       .ac-conv-del:hover { color: var(--dsw-alias-state-error-primary, #d92d20); background: var(--dsw-alias-bg-layer-2, #f2f3f5); }
+
+      /* ---------------------------------------------------------------- *
+       * DeepSeek chat alignment: one centered column, gray user bubbles,
+       * plain assistant text, pill composer, circular send button.
+       * ---------------------------------------------------------------- */
+      .ac-root {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        font-size: 15px;
+        line-height: 1.75;
+      }
+      .ac-head { padding: 11px 22px; border-bottom: 1px solid var(--dsw-alias-border-l1, #e9eaec); }
+      .ac-title { font-size: 15px; font-weight: 600; }
+      .ac-sub { margin-top: 1px; font-size: 12px; }
+      .ac-head-actions { gap: 0; }
+      .ac-ghost { font-size: 13px; padding: 6px 10px; border-radius: 8px; }
+      .ac-ghost:hover { background: var(--dsw-alias-bg-layer-2, #f2f3f5); color: var(--dsw-alias-label-primary, #1f2329); }
+      .ac-agent-btn { padding: 5px 12px; font-size: 13px; background: transparent; }
+
+      .ac-thread { padding: 26px 22px 10px; }
+      .ac-thread-inner { max-width: 748px; gap: 26px; }
+      .ac-msg { gap: 0; }
+      .ac-msg-user { justify-content: flex-end; }
+      .ac-msg-body { gap: 4px; }
+      .ac-msg-user .ac-msg-body { max-width: 100%; align-items: flex-end; }
+      .ac-msg-assistant .ac-msg-body { align-items: stretch; }
+      .ac-msg-assistant .ac-bubble { width: 100%; }
+      .ac-thread::-webkit-scrollbar { width: 8px; }
+      .ac-thread::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, 0.14); border-radius: 4px; }
+      .ac-thread::-webkit-scrollbar-track { background: transparent; }
+
+      .ac-bubble {
+        max-width: 100%;
+        padding: 0;
+        border: none;
+        border-radius: 0;
+        background: transparent;
+        font-size: 15px;
+        line-height: 1.78;
+      }
+      .ac-bubble-user {
+        max-width: min(78%, 560px);
+        padding: 10px 16px;
+        border-radius: 18px;
+        background: var(--dsw-alias-bg-layer-2, #f3f4f6);
+        font-size: 14.5px;
+        line-height: 1.7;
+      }
+      .ac-bubble-thinking { padding: 2px 0; }
+      .ac-msg-foot {
+        margin-top: 10px;
+        padding-top: 0;
+        border-top: none;
+        font-size: 11.5px;
+        color: var(--dsw-alias-label-secondary, #9aa0a6);
+      }
+      .ac-stream-note { margin-top: 6px; font-size: 12px; }
+
+      .ac-md p { margin: 0 0 14px; }
+      .ac-md h3 { margin: 22px 0 10px; font-size: 17px; }
+      .ac-md h4 { margin: 18px 0 8px; font-size: 15px; }
+      .ac-md h3:first-child, .ac-md h4:first-child { margin-top: 0; }
+      .ac-md ul, .ac-md ol { margin: 8px 0 14px; padding-left: 24px; }
+      .ac-md li { margin: 5px 0; }
+      .ac-md code { font-size: 13px; border-radius: 6px; }
+      .ac-md pre { margin: 12px 0; padding: 14px 16px; border-radius: 12px; border: none; }
+      .ac-md pre code { font-size: 13px; line-height: 1.6; }
+      .ac-md blockquote { margin: 12px 0; padding-left: 12px; border-left-width: 2px; }
+      .ac-md table { font-size: 13.5px; }
+      .ac-md th, .ac-md td { padding: 8px 12px; }
+      .ac-table { margin: 12px 0; }
+
+      .ac-empty { max-width: 520px; margin: 14vh auto 0; }
+      .ac-empty-title { margin-bottom: 8px; font-size: 21px; font-weight: 600; }
+      .ac-empty-hint { font-size: 13.5px; line-height: 1.7; }
+
+      .ac-composer { padding: 6px 22px 14px; border-top: none; }
+      .ac-composer-inner {
+        max-width: 748px;
+        gap: 10px;
+        padding: 9px 9px 9px 18px;
+        border-radius: 26px;
+        border: 1px solid var(--dsw-alias-border-l2, #d5d8dd);
+        background: var(--dsw-alias-bg-base, #ffffff);
+        box-shadow: 0 2px 12px rgba(15, 23, 42, 0.05);
+      }
+      .ac-composer-inner:focus-within {
+        border-color: var(--dsw-alias-brand-primary, #4f6bed);
+        box-shadow: 0 3px 16px rgba(79, 107, 237, 0.14);
+      }
+      .ac-textarea { padding: 6px 0; font-size: 15px; line-height: 1.6; }
+      .ac-foot { margin-top: 9px; font-size: 11.5px; }
+
+      .ac-btn-send,
+      .ac-btn-stop {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        border-radius: 50%;
+      }
+      .ac-btn-send { background: var(--dsw-alias-brand-primary, #4f6bed); }
+      .ac-btn-send:disabled {
+        background: var(--dsw-alias-bg-layer-2, #eceef1);
+        color: var(--dsw-alias-label-secondary, #b0b4ba);
+        opacity: 1;
+      }
+      .ac-icon-send { display: block; }
+      .ac-icon-stop { display: block; }
+
+      .ac-notice { max-width: 748px; margin-bottom: 10px; padding: 9px 14px; border-radius: 12px; font-size: 12.5px; }
+      .ac-msg-tools { display: flex; gap: 4px; margin-top: 8px; }
+      .ac-tool-btn {
+        border: none;
+        background: transparent;
+        color: var(--dsw-alias-label-secondary, #9aa0a6);
+        font: inherit;
+        font-size: 11.5px;
+        padding: 3px 7px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background 0.12s ease, color 0.12s ease;
+      }
+      .ac-tool-btn:hover { background: var(--dsw-alias-bg-layer-2, #f2f3f5); color: var(--dsw-alias-label-primary, #1f2329); }
+      .ac-action-card { border-radius: 16px; }
+      .ac-artifact { border-radius: 12px; }
+      .ac-card { border-radius: 20px; }
     `;
 
     /* ------------------------------------------------------------------ *
