@@ -47,6 +47,7 @@ const ENTERPRISE_ERRORS = {
   SESSION_BUSY: '助手正在处理上一条消息，请稍后再试',
   AUTH_EXPIRED: '登录已失效，请重新登录',
   RUN_TIMEOUT: '助手处理超时，请稍后重试',
+  STORAGE_UNAVAILABLE: '服务端收尾保存出错，本轮回答可能没有进入历史；可以重试一次',
 };
 
 const MAX_BODY_BYTES = 256 * 1024;
@@ -758,8 +759,11 @@ async function handleEnterpriseChat(res, session, message, conversationId, expir
     }
 
     const events = frames;
+    const result = events.find((event) => event.type === 'result');
     const failure = events.find((event) => event.type === 'error');
-    if (failure) {
+    // A failure that arrives after the result only means the service could not
+    // finish its own bookkeeping; the answer and the generated files stand.
+    if (failure && !result) {
       if (failure.code === 'AUTH_EXPIRED') {
         expire();
         sendJson(res, 200, { ok: false, reason: 'expired', message: '登录已失效，请重新登录' });
@@ -772,8 +776,10 @@ async function handleEnterpriseChat(res, session, message, conversationId, expir
       sendJson(res, 200, { ok: false, message: enterpriseMessage(failure, response.status) });
       return;
     }
+    if (failure) {
+      note('enterprise-late-error', { code: text(failure.code), status: response.status });
+    }
 
-    const result = events.find((event) => event.type === 'result');
     const partial = events
       .filter((event) => event.type === 'text_delta' || event.type === 'delta')
       .map((event) => text(event.text))
@@ -970,8 +976,11 @@ async function handleChatStream(req, res, sessions) {
   }
 
   note('enterprise-stream', { status: response.status, frames: counts, answered: answer.length, artifacts });
+  if (failure) note('enterprise-late-error', { code: text(failure.code), status: response.status, sawResult });
 
-  if (failure) {
+  // A late error frame (session bookkeeping, event-stream teardown) must not
+  // erase an answer the service already produced: assets stay downloadable.
+  if (failure && !sawResult) {
     if (failure.code === 'AUTH_EXPIRED') {
       dropSession();
       emit({ type: 'expired' });
