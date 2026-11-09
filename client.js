@@ -762,6 +762,22 @@ window.__ModuleLoader__.load({
       );
     }
 
+    /**
+     * The Python service lists every artifact a session has produced so far, so
+     * each turn would repeat its predecessors' files: keep each file only on the
+     * turn that first showed it.
+     */
+    function takeUnseenArtifacts(names, seen) {
+      const fresh = [];
+      for (const item of Array.isArray(names) ? names : []) {
+        const name = typeof item === 'string' ? item.trim() : '';
+        if (!name || seen.has(name)) continue;
+        seen.add(name);
+        fresh.push(name);
+      }
+      return fresh;
+    }
+
     /** The write action the agent is waiting on: a confirm card, not a form. */
     function actionSummary(item) {
       const list = Array.isArray(item && item.confirmationSummary) ? item.confirmationSummary : [];
@@ -1622,6 +1638,8 @@ window.__ModuleLoader__.load({
       const abortRef = useRef(null);
       const loadConversationRef = useRef(null);
       const messagesRef = useRef([]);
+      /** Asks the Host for a fresh assistant session (new chat / agent switch). */
+      const newSessionRef = useRef(false);
 
       useEffect(() => {
         reportToHost('panel-mounted', { phase: 'boot' });
@@ -1676,6 +1694,7 @@ window.__ModuleLoader__.load({
           const saved = conversationsRef.current[code] || '';
           conversationRef.current = saved;
           setConversationId(saved);
+          newSessionRef.current = !saved;
           if (saved && sidRef.current) void loadConversationRef.current(saved);
         },
         [cancelTurn],
@@ -1691,6 +1710,7 @@ window.__ModuleLoader__.load({
         setView('chat');
         setMessages([]);
         applyConversation('');
+        newSessionRef.current = true;
         setLoginError('');
         setNotice(t('sessionExpired'));
       }, [applyConversation, t]);
@@ -1773,6 +1793,9 @@ window.__ModuleLoader__.load({
             // stay editable after a reload.
             const isSubmissionTurn = (item) =>
               item.role === 'user' && typeof item.content === 'string' && item.content.indexOf('补充业务信息') === 0;
+            // Stored turns carry the session's whole artifact list, so show each
+            // file only on the earliest turn that lists it.
+            const seenArtifacts = new Set();
             const mapped = list.map((item, index) => {
               let form = null;
               if (item.role === 'assistant' && typeof item.businessFormJson === 'string' && item.businessFormJson) {
@@ -1797,9 +1820,7 @@ window.__ModuleLoader__.load({
                 at: Date.parse(item.createdAt) || Date.now(),
                 meta: {},
                 form,
-                artifacts: Array.isArray(item.artifacts)
-                  ? item.artifacts.filter((name) => typeof name === 'string' && name)
-                  : [],
+                artifacts: takeUnseenArtifacts(item.artifacts, seenArtifacts),
               };
             });
             setMessages(mapped);
@@ -2075,8 +2096,16 @@ window.__ModuleLoader__.load({
               setMessages((previous) =>
                 previous.map((message) => (message.id === replyId ? { ...message, ...changes } : message)),
               );
+            const freshSession = newSessionRef.current === true;
+            newSessionRef.current = false;
             const final = await streamChat(
-              { sid, agent, conversationId: conversationRef.current || null, message: text },
+              {
+                sid,
+                agent,
+                conversationId: conversationRef.current || null,
+                message: text,
+                newSession: freshSession,
+              },
               (event) => {
                 if (event.type === 'delta') {
                   setMessages((previous) =>
@@ -2108,11 +2137,16 @@ window.__ModuleLoader__.load({
               setNotice(final.message || t('requestFailed'));
               return;
             }
+            const shownArtifacts = new Set();
+            messagesRef.current.forEach((message) => {
+              if (message.id === replyId) return;
+              (Array.isArray(message.artifacts) ? message.artifacts : []).forEach((name) => shownArtifacts.add(String(name)));
+            });
             patch({
               streaming: false,
               progress: '',
               content: (final && final.answer) || t('noAnswer'),
-              artifacts: final && Array.isArray(final.artifacts) ? final.artifacts : [],
+              artifacts: takeUnseenArtifacts(final && final.artifacts, shownArtifacts),
             });
             return;
           }
@@ -2310,6 +2344,7 @@ window.__ModuleLoader__.load({
         setMessages([]);
         setNotice('');
         applyConversation('');
+        newSessionRef.current = true;
         setView('chat');
       }, [applyConversation, cancelTurn]);
 

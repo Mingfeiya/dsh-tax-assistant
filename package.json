@@ -1,6 +1,6 @@
 {
   "name": "dsh-tax-assistant",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "Signs in to a business account and chats with the tax assistant panel in the left sidebar, switching between agents.",
   "type": "module",
   "license": "MIT",

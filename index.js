@@ -640,7 +640,11 @@ async function handleChat(req, res, sessions) {
     const agent = resolveAgent(body, session);
 
     if (agent === ENTERPRISE_AGENT) {
-      await handleEnterpriseChat(res, session, message, conversationId, () => {
+      // A new chat must start a new assistant session; otherwise the service
+      // keeps listing the previous session's files and history.
+      const fresh = body.newSession === true || !conversationId;
+      if (fresh) session.enterpriseSessionId = '';
+      await handleEnterpriseChat(res, session, message, fresh ? null : conversationId, () => {
         const sid = text(body.sid);
         if (sid) sessions.delete(sid);
       });
@@ -843,9 +847,14 @@ async function handleChatStream(req, res, sessions) {
     }
   };
 
+  const preferred = body.newSession === true ? '' : text(body.conversationId).slice(0, MAX_ID_CHARS);
+  // A new chat starts a new assistant session; otherwise the Python service
+  // keeps listing the previous session's files and history.
+  if (!preferred) session.enterpriseSessionId = '';
+
   let sessionId;
   try {
-    sessionId = await ensureEnterpriseSession(session, text(body.conversationId).slice(0, MAX_ID_CHARS));
+    sessionId = await ensureEnterpriseSession(session, preferred);
   } catch (error) {
     sendJson(res, 200, {
       ok: false,
